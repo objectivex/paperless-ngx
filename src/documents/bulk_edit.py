@@ -17,11 +17,13 @@ from documents.data_models import ConsumableDocument
 from documents.data_models import DocumentMetadataOverrides
 from documents.data_models import DocumentSource
 from documents.models import Correspondent
+from documents.models import CustomField
 from documents.models import CustomFieldInstance
 from documents.models import Document
 from documents.models import DocumentType
 from documents.models import StoragePath
 from documents.permissions import set_permissions_for_object
+from documents.serialisers import CustomFieldInstanceSerializer
 from documents.tasks import bulk_update_documents
 from documents.tasks import consume_file
 from documents.tasks import update_document_archive_file
@@ -155,6 +157,29 @@ def modify_custom_fields(doc_ids: list[int], add_custom_fields, remove_custom_fi
 
     bulk_update_documents.delay(document_ids=affected_docs)
 
+    return "OK"
+
+
+def set_custom_field_value(doc_ids: list[int], custom_field, value):
+    qs = Document.objects.filter(id__in=doc_ids).only("pk")
+    affected_docs = list(qs.values_list("pk", flat=True))
+
+    for doc_id in affected_docs:
+        custom_field_instance = CustomFieldInstance.objects.get(
+            document_id=doc_id,
+            field_id=custom_field,
+        )
+        document = Document.objects.get(id=doc_id)
+        custom_field = CustomField.objects.get(
+            id=custom_field_instance.field_id,
+        )
+        instance_data = {
+            "document": document,
+            "field": custom_field,
+            "value": value,
+        }
+
+        CustomFieldInstanceSerializer().create(instance_data)
     return "OK"
 
 
