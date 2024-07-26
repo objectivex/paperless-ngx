@@ -412,6 +412,11 @@ The following methods are supported:
     - `"merge": true or false` (defaults to false)
   - The `merge` flag determines if the supplied permissions will overwrite all existing permissions (including
     removing them) or be merged with existing permissions.
+- `set_custom_field_value`
+  - Requires `parameters`:
+    - `"custom_field": CUSTOM_FIELD_ID`
+    - `"value": VALUE`. Type depending on the type of the custom field.
+    - This method does not add the custom field to the document, if it is not already added.
 - `merge`
   - No additional `parameters` required.
   - The ordering of the merged document is determined by the list of IDs.
