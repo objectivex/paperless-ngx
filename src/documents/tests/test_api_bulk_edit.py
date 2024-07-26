@@ -51,8 +51,14 @@ class TestBulkEditAPI(DirectoriesMixin, APITestCase):
         self.doc3.tags.add(self.t2)
         self.doc4.tags.add(self.t1, self.t2)
         self.sp1 = StoragePath.objects.create(name="sp1", path="Something/{checksum}")
-        self.cf1 = CustomField.objects.create(name="cf1", data_type="text")
-        self.cf2 = CustomField.objects.create(name="cf2", data_type="text")
+        self.cf1 = CustomField.objects.create(
+            name="cf1",
+            data_type=CustomField.FieldDataType.STRING,
+        )
+        self.cf2 = CustomField.objects.create(
+            name="cf2",
+            data_type=CustomField.FieldDataType.STRING,
+        )
 
     @mock.patch("documents.bulk_edit.bulk_update_documents.delay")
     def test_api_set_correspondent(self, bulk_update_task_mock):
@@ -349,6 +355,101 @@ class TestBulkEditAPI(DirectoriesMixin, APITestCase):
                     "parameters": {
                         "add_custom_fields": [self.cf1.id],
                         "remove_custom_fields": [99],
+                    },
+                },
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        m.assert_not_called()
+
+    @mock.patch("documents.serialisers.bulk_edit.set_custom_field_value")
+    def test_api_set_custom_field_value(self, m):
+        m.return_value = "OK"
+
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id, self.doc2.id],
+                    "method": "set_custom_field_value",
+                    "parameters": {
+                        "custom_field": self.cf2.id,
+                        "value": "Value",
+                    },
+                },
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        m.assert_called_once()
+        args, kwargs = m.call_args
+        self.assertEqual(args[0], [self.doc1.id, self.doc2.id])
+        self.assertEqual(kwargs["custom_field"], self.cf2.id)
+        self.assertEqual(kwargs["value"], "Value")
+
+    @mock.patch("documents.serialisers.bulk_edit.set_custom_field_value")
+    def test_api_set_custom_field_value_invalid_params(self, m):
+        """
+        GIVEN:
+            - API data to set value of custom field is malformed
+        WHEN:
+            - API to set value of custom field is called
+        THEN:
+            - API returns HTTP 400
+            - set_custom_field_value is not called
+        """
+        m.return_value = "OK"
+
+        # Missing custom_field
+
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id, self.doc2.id],
+                    "method": "set_custom_field_value",
+                    "parameters": {
+                        "value": "Value",
+                    },
+                },
+            ),
+            content_type="application/json",
+        )
+
+        # custom_field is a list
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        m.assert_not_called()
+
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id, self.doc2.id],
+                    "method": "set_custom_field_value",
+                    "parameters": {
+                        "custom_field": [self.cf1.id],
+                        "value": "Value",
+                    },
+                },
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        m.assert_not_called()
+
+        # Invalid id for custom_field
+        response = self.client.post(
+            "/api/documents/bulk_edit/",
+            json.dumps(
+                {
+                    "documents": [self.doc1.id, self.doc2.id],
+                    "method": "set_custom_field_value",
+                    "parameters": {
+                        "custom_field": 9999,
+                        "value": "Value",
                     },
                 },
             ),

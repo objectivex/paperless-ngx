@@ -1137,6 +1137,9 @@ class BulkEditSerializer(
     def _validate_parameters_set_custom_field_value(self, parameters):
         if "custom_field" in parameters:
             custom_field_id = parameters["custom_field"]
+            if isinstance(custom_field_id, list):
+                raise serializers.ValidationError("custom_field must be a single int")
+
             try:
                 CustomField.objects.get(id=custom_field_id)
             except CustomField.DoesNotExist:
