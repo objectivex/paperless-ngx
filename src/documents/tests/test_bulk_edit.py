@@ -235,6 +235,147 @@ class TestBulkEdit(DirectoriesMixin, TestCase):
         args, kwargs = self.async_task.call_args
         self.assertCountEqual(kwargs["document_ids"], [self.doc1.id, self.doc2.id])
 
+    def test_set_custom_field_value(self):
+        cf1 = CustomField.objects.create(
+            name="cf1",
+            data_type=CustomField.FieldDataType.STRING,
+        )
+        cf2 = CustomField.objects.create(
+            name="cf2",
+            data_type=CustomField.FieldDataType.INT,
+        )
+
+        cfi11 = CustomFieldInstance.objects.create(
+            document=self.doc1,
+            field=cf1,
+        )
+        cfi21 = CustomFieldInstance.objects.create(
+            document=self.doc2,
+            field=cf1,
+        )
+        cfi12 = CustomFieldInstance.objects.create(
+            document=self.doc1,
+            field=cf2,
+        )
+
+        self.assertEqual(
+            self.doc1.custom_fields.count(),
+            2,
+        )
+        self.assertEqual(
+            self.doc2.custom_fields.count(),
+            1,
+        )
+
+        bulk_edit.set_custom_field_value(
+            [self.doc1.id, self.doc2.id],
+            custom_field=cf1.id,
+            value="Value",
+        )
+
+        cfi11.refresh_from_db()
+        cfi12.refresh_from_db()
+        cfi21.refresh_from_db()
+
+        self.assertEqual("Value", cfi11.value_text)
+        self.assertIsNone(cfi12.value_int)
+        self.assertEqual("Value", cfi21.value_text)
+
+        bulk_edit.set_custom_field_value(
+            [self.doc1.id],
+            custom_field=cf1.id,
+            value="New Value",
+        )
+
+        cfi11.refresh_from_db()
+        cfi12.refresh_from_db()
+        cfi21.refresh_from_db()
+
+        self.assertEqual("New Value", cfi11.value_text)
+        self.assertIsNone(cfi12.value_int)
+        self.assertEqual("Value", cfi21.value_text)
+
+        bulk_edit.set_custom_field_value(
+            [self.doc1.id],
+            custom_field=cf2.id,
+            value=42,
+        )
+
+        cfi11.refresh_from_db()
+        cfi12.refresh_from_db()
+        cfi21.refresh_from_db()
+
+        self.assertEqual("New Value", cfi11.value_text)
+        self.assertEqual(42, cfi12.value_int)
+        self.assertEqual("Value", cfi21.value_text)
+
+    def test_set_custom_field_value_with_error(self):
+        cf1 = CustomField.objects.create(
+            name="cf1",
+            data_type=CustomField.FieldDataType.STRING,
+        )
+        cf2 = CustomField.objects.create(
+            name="cf2",
+            data_type=CustomField.FieldDataType.INT,
+        )
+
+        cfi11 = CustomFieldInstance.objects.create(
+            document=self.doc1,
+            field=cf1,
+        )
+        cfi22 = CustomFieldInstance.objects.create(
+            document=self.doc2,
+            field=cf2,
+        )
+
+        try:
+            bulk_edit.set_custom_field_value(
+                [self.doc2.id],
+                custom_field=cf1.id,
+                value=42,
+            )
+            self.fail()
+        except CustomFieldInstance.DoesNotExist:
+            pass
+
+        cfi11.refresh_from_db()
+        cfi22.refresh_from_db()
+
+        self.assertIsNone(cfi11.value)
+        self.assertIsNone(cfi22.value)
+
+        try:
+            bulk_edit.set_custom_field_value(
+                [self.doc1.id, self.doc2.id],
+                custom_field=cf1.id,
+                value=42,
+            )
+            self.fail()
+        except CustomFieldInstance.DoesNotExist:
+            pass
+
+        cfi11.refresh_from_db()
+        cfi22.refresh_from_db()
+
+        self.assertIsNone(cfi11.value)
+        self.assertIsNone(cfi22.value)
+
+        try:
+            bulk_edit.set_custom_field_value(
+                [self.doc2.id],
+                custom_field=cf2.id,
+                value="String Value",
+            )
+            self.fail()
+        except ValueError:
+            pass
+
+        cfi11.refresh_from_db()
+        cfi22.refresh_from_db()
+
+        self.assertIsNone(cfi11.value)
+        self.assertIsNone(cfi22.value)
+
     def test_delete(self):
         self.assertEqual(Document.objects.count(), 5)
         bulk_edit.delete([self.doc1.id, self.doc2.id])
